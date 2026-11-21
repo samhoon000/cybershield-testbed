@@ -47,6 +47,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.sessions = make_sessions(engine)
     app.state.auth_limit = AuthRateLimit(settings.auth_requests_per_minute)
     app.state.protection = protection
+    app.state.subject_key = bytes.fromhex(settings.protection_subject_key.get_secret_value())
     api_prefix = "/api"
     api_routers = (auth_api.router, courses_api.router, assignments_api.router, portal_api.router)
     route_templates = frozenset(api_prefix + route.path_format for router in api_routers

@@ -1,4 +1,4 @@
-"""Staging policy protocol. This file is shared verbatim with the Northfield checkout."""
+"""Signed policy protocol. This file is shared verbatim with the Northfield checkout."""
 
 import hashlib
 import hmac
@@ -9,12 +9,13 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 SYNC_PATH = "/v1/policy/sync"
 MAX_BYTES = 16384
 MAX_LIFETIME = 120
-APP = r"^[a-z][a-z0-9-]{0,39}-staging$"
+APP = r"^[a-z][a-z0-9-]{0,39}-(?:staging|prod)$"
 UUID = r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
 SUBJECT = r"^s1_[0-9a-f]{64}$"
 Id = Annotated[str, Field(pattern=UUID)]
 Subject = Annotated[str, Field(pattern=SUBJECT)]
 App = Annotated[str, Field(pattern=APP)]
+Environment = Literal["staging", "production"]
 Route = Literal[
     "/api/courses/{course_id}/enroll", "/api/courses/{course_id}/access",
     "/api/assignments/{assignment_id}/submit",
@@ -35,10 +36,14 @@ class Rule(Model):
     expires: int = Field(ge=0)
 
 
+def channel_environment(app):
+    return "production" if app.endswith("-prod") else "staging"
+
+
 class Snapshot(Model):
     version: int = Field(ge=1, le=1)
     app: App
-    environment: Literal["staging"]
+    environment: Environment
     id: Id
     revision: int = Field(ge=1, le=2**53 - 1)
     created: int = Field(ge=0)
@@ -49,7 +54,9 @@ class Snapshot(Model):
     @model_validator(mode="after")
     def bounded(self):
         slots = {(rule.subject, rule.method, rule.route) for rule in self.rules}
-        if (not 0 < self.expires - self.created <= MAX_LIFETIME
+        if (self.environment != channel_environment(self.app)
+                or (self.environment == "production" and any(rule.action != "rate_limit" for rule in self.rules))
+                or not 0 < self.expires - self.created <= MAX_LIFETIME
                 or (not self.enabled and self.rules) or len(slots) != len(self.rules)
                 or len({rule.id for rule in self.rules}) != len(self.rules)
                 or any(not self.created < rule.expires <= self.expires for rule in self.rules)):
@@ -79,11 +86,17 @@ class Receipt(Model):
 class Sync(Model):
     version: int = Field(ge=1, le=1)
     app: App
-    environment: Literal["staging"]
+    environment: Environment
     nonce: Id
     timestamp: int = Field(ge=0)
     receipts: list[Receipt] = Field(max_length=16)
     errors: int = Field(default=0, ge=0, le=2**53 - 1)
+
+    @model_validator(mode="after")
+    def bound_channel(self):
+        if self.environment != channel_environment(self.app):
+            raise ValueError("Policy channel does not match the environment")
+        return self
 
 
 def sign(key, purpose, nonce, body):

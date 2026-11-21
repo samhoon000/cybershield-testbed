@@ -51,7 +51,7 @@ class RequestBoundary:
         auth = state.get("auth_outcome", "none")
         if state.get("rate_limit_outcome") == "denied":
             auth = "rate_limited"
-        elif auth not in {"anonymous", "authenticated", "denied", "origin_denied"}:
+        elif auth not in {"anonymous", "authenticated", "denied", "authorization_denied", "origin_denied"}:
             auth = "none"
         method = scope["method"]
         self.telemetry.submit({

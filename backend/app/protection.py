@@ -1,4 +1,4 @@
-"""Staging-only enforcement using locally cached, signed policy snapshots."""
+"""Scoped enforcement using locally cached, signed policy snapshots."""
 
 import asyncio
 import hashlib
@@ -17,20 +17,26 @@ from uuid import uuid4
 import httpx
 from fastapi import HTTPException
 
-from .policy_wire import MAX_BYTES, Receipt, Route, Snapshot, Sync, sign
+from .policy_wire import MAX_BYTES, Receipt, Route, Snapshot, Sync, channel_environment, sign
 
 ROUTES = set(get_args(Route))
 LOG = logging.getLogger(__name__)
 
 
+def subject_for(key, app, user):
+    scope = f"northfield-subject-v1\n{app}\n{channel_environment(app)}\n{user.id}\n{user.created_at.isoformat()}"
+    return "s1_" + hmac.new(key, scope.encode(), hashlib.sha256).hexdigest()
+
+
 class StagingProtection:
     def __init__(self, settings, clock=time.time, monotonic=time.monotonic):
         self.app = settings.telemetry_app_id
+        self.environment = channel_environment(self.app)
         self.url = settings.protection_url
         self.policy_key = bytes.fromhex(settings.protection_hmac_key.get_secret_value())
-        self.subject_key = bytes.fromhex(settings.protection_subject_key.get_secret_value())
-        self.watermark = settings.sqlite_path.with_suffix(".policy-state.sqlite3")
-        self.kill_switch = settings.sqlite_path.with_suffix(".policy-disabled")
+        self.watermark = settings.protection_state_path or settings.sqlite_path.with_suffix(".policy-state.sqlite3")
+        self.kill_switch = (self.watermark.with_suffix(".policy-disabled") if settings.protection_state_path
+                            else settings.sqlite_path.with_suffix(".policy-disabled"))
         self.clock = clock
         self.monotonic = monotonic
         self.lock = Lock()
@@ -41,10 +47,6 @@ class StagingProtection:
         self.valid_until = 0.0
         self.disabled_revision = 0
         self.sync_errors = 0
-
-    def subject(self, user):
-        scope = f"northfield-subject-v1\n{self.app}\nstaging\n{user.id}\n{user.created_at.isoformat()}"
-        return "s1_" + hmac.new(self.subject_key, scope.encode(), hashlib.sha256).hexdigest()
 
     def receipt(self, snapshot, outcome, rule_id=None, request_id=None):
         item = Receipt(id=str(uuid4()), policy_id=snapshot.id, revision=snapshot.revision, outcome=outcome,
@@ -65,7 +67,8 @@ class StagingProtection:
 
     def install(self, snapshot):
         now = int(self.clock())
-        if snapshot.app != self.app or snapshot.environment != "staging" or not snapshot.created <= now < snapshot.expires:
+        if (snapshot.app != self.app or snapshot.environment != self.environment
+                or not snapshot.created <= now < snapshot.expires):
             return False
         with self.lock:
             if self.snapshot and snapshot.revision <= self.snapshot.revision:
@@ -132,6 +135,7 @@ class StagingProtection:
                 wait = max(1, min(math.ceil(60 - (elapsed - started)), math.ceil(rule.expires - now),
                                   math.ceil(cutoff - elapsed)))
                 self.receipt(snapshot, "rate_limited", rule.id, identifier)
+                request.state.rate_limit_outcome = "denied"
                 raise HTTPException(429, "Too many requests. Try again later.", headers={"Retry-After": str(wait)})
             self.buckets[rule.id] = started, used + 1
 
@@ -140,7 +144,7 @@ class StagingProtection:
             if self.snapshot and self.snapshot.enabled and self.clock() < self.snapshot.expires:
                 self.locally_disabled(self.snapshot)
             receipts = list(self.receipts.values())[:16]
-        sync = Sync(version=1, app=self.app, environment="staging", nonce=str(uuid4()),
+        sync = Sync(version=1, app=self.app, environment=self.environment, nonce=str(uuid4()),
                     timestamp=int(self.clock()), receipts=receipts, errors=self.sync_errors)
         body = sync.model_dump_json().encode()
         async with asyncio.timeout(4):
@@ -180,7 +184,7 @@ class StagingProtection:
                 self.snapshot = None
                 self.rules.clear()
                 self.sync_errors = min(self.sync_errors + 1, 2**53 - 1)
-            LOG.warning("Staging policy sync unavailable: %s", type(error).__name__)
+            LOG.warning("Policy sync unavailable: %s", type(error).__name__)
             return False
         return True
 

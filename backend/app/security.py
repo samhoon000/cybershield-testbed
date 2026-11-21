@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session as DatabaseSession
 
 from .activity import record
 from .models import Session, User, now
+from .protection import subject_for
 
 passwords = PasswordHasher()
 DUMMY_HASH = passwords.hash(token_urlsafe(32))
@@ -128,11 +129,12 @@ def require_user(request: Request, db: DatabaseSession = Depends(db_session)) ->
         supplied = request.headers.get("x-csrf-token", "").encode()
         if not compare_digest(supplied, claims["csrf"].encode()):
             deny(request, db, 403, "Invalid request token", user.id)
-    protection = request.app.state.protection
-    if protection and user.role == "student":
-        subject = protection.subject(user)
+    key = request.app.state.subject_key
+    if key and user.role == "student":
+        subject = subject_for(key, settings.telemetry_app_id, user)
         request.state.telemetry_subject = subject
-        protection.enforce(request, subject)
+        if protection := request.app.state.protection:
+            protection.enforce(request, subject)
     return user
 
 
