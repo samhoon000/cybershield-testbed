@@ -166,3 +166,9 @@ The backend can forward structured HTTP completion metadata to a Sentinel Stage 
 | `TELEMETRY_HMAC_KEY` | The collector's matching per-app 64-character lowercase hex key |
 
 Production requires HTTPS. For local development and tests, a loopback HTTP collector is supported. The sender uses an in-memory queue. It forwards request IDs, route templates, methods, statuses, durations, and enumerated authentication outcomes. Keep the key in the backend environment.
+
+## Isolated staging enforcement
+
+Set `PROTECTION_URL=http://127.0.0.1:8093/v1/policy/sync` to use a local Sentinel staging policy service. Configure a telemetry app ID ending in `-staging` and distinct keys for telemetry, policy sync, subject attribution, and JWTs. Production settings reject this configuration. Staging policies require a newer signed revision and expire within two minutes.
+
+The backend applies an approved rule only after verifying a student’s session and CSRF, on the exact permitted route template and method. Policy sync runs in the background. If sync fails or the policy expires, normal request handling resumes. To disable an installed revision locally, create an empty file beside the staging database using the same basename and the extension `.policy-disabled`. A fresh approved revision is required after disabling.

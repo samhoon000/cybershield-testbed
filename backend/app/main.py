@@ -14,6 +14,7 @@ from . import assignments_api, auth_api, courses_api, portal_api
 from .config import ROOT, Settings
 from .db import make_engine, make_sessions
 from .middleware import RequestBoundary
+from .protection import StagingProtection
 from .security import AuthRateLimit
 from .telemetry import TelemetrySender
 
@@ -25,16 +26,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     if settings.telemetry_collector_url:
         telemetry = TelemetrySender(settings.telemetry_collector_url, settings.telemetry_app_id,
                                     bytes.fromhex(settings.telemetry_hmac_key.get_secret_value()))
+    protection = StagingProtection(settings) if settings.protection_url else None
 
     @asynccontextmanager
     async def lifespan(_app):
-        worker = asyncio.create_task(telemetry.run()) if telemetry else None
+        workers = [asyncio.create_task(service.run()) for service in (telemetry, protection) if service]
         try:
             yield
         finally:
-            if worker:
+            for worker in workers:
                 worker.cancel()
-                await asyncio.gather(worker, return_exceptions=True)
+            await asyncio.gather(*workers, return_exceptions=True)
             engine.dispose()
 
     development = settings.app_env != "production"
@@ -44,6 +46,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.sessions = make_sessions(engine)
     app.state.auth_limit = AuthRateLimit(settings.auth_requests_per_minute)
+    app.state.protection = protection
     api_prefix = "/api"
     api_routers = (auth_api.router, courses_api.router, assignments_api.router, portal_api.router)
     route_templates = frozenset(api_prefix + route.path_format for router in api_routers

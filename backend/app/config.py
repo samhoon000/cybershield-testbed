@@ -8,12 +8,13 @@ from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .telemetry import PATH
+from .policy_wire import APP as PROTECTION_APP, SYNC_PATH
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=ROOT / ".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=ROOT / ".env", extra="ignore", hide_input_in_errors=True)
 
     app_env: Literal["development", "test", "production"] = "development"
     jwt_secret: SecretStr
@@ -31,6 +32,9 @@ class Settings(BaseSettings):
     telemetry_collector_url: str = ""
     telemetry_app_id: str = ""
     telemetry_hmac_key: SecretStr = SecretStr("")
+    protection_url: str = ""
+    protection_hmac_key: SecretStr = SecretStr("")
+    protection_subject_key: SecretStr = SecretStr("")
 
     @property
     def origins(self) -> list[str]:
@@ -66,4 +70,16 @@ class Settings(BaseSettings):
                     or not re.fullmatch(r"[a-z][a-z0-9-]{0,47}", self.telemetry_app_id)
                     or not re.fullmatch(r"[0-9a-f]{64}", key)):
                 raise ValueError("Telemetry requires a collector URL, application ID, and 64-digit hex HMAC key")
+        policy_key = self.protection_hmac_key.get_secret_value()
+        subject_key = self.protection_subject_key.get_secret_value()
+        if any((self.protection_url, policy_key, subject_key)):
+            target = urlsplit(self.protection_url)
+            if (self.app_env == "production" or not self.telemetry_collector_url
+                    or not re.fullmatch(PROTECTION_APP, self.telemetry_app_id)
+                    or target.scheme != "http" or target.hostname != "127.0.0.1"
+                    or target.username is not None or not target.port or target.path != SYNC_PATH
+                    or self.protection_url != f"http://127.0.0.1:{target.port}{SYNC_PATH}"
+                    or not all(re.fullmatch(r"[0-9a-f]{64}", value) for value in (policy_key, subject_key))
+                    or len({policy_key, subject_key, key, self.jwt_secret.get_secret_value()}) != 4):
+                raise ValueError("Policy enforcement requires an isolated staging app and independent local keys")
         return self

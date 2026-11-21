@@ -128,6 +128,11 @@ def require_user(request: Request, db: DatabaseSession = Depends(db_session)) ->
         supplied = request.headers.get("x-csrf-token", "").encode()
         if not compare_digest(supplied, claims["csrf"].encode()):
             deny(request, db, 403, "Invalid request token", user.id)
+    protection = request.app.state.protection
+    if protection and user.role == "student":
+        subject = protection.subject(user)
+        request.state.telemetry_subject = subject
+        protection.enforce(request, subject)
     return user
 
 

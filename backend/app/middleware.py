@@ -62,6 +62,7 @@ class RequestBoundary:
             "status": status,
             "duration_ms": round((perf_counter() - state["started_at"]) * 1000, 2),
             "auth": auth,
+            **({"subject": state["telemetry_subject"]} if "telemetry_subject" in state else {}),
         })
 
     async def handle(self, scope, receive, send, state, headers, is_api):
