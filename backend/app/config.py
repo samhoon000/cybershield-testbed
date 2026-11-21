@@ -1,10 +1,13 @@
 from pathlib import Path
+import re
 import sys
 from typing import Literal
 from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from .telemetry import PATH
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -25,6 +28,9 @@ class Settings(BaseSettings):
     demo_admin_password: SecretStr = SecretStr("")
     demo_student_email: str = ""
     demo_student_password: SecretStr = SecretStr("")
+    telemetry_collector_url: str = ""
+    telemetry_app_id: str = ""
+    telemetry_hmac_key: SecretStr = SecretStr("")
 
     @property
     def origins(self) -> list[str]:
@@ -47,4 +53,17 @@ class Settings(BaseSettings):
             raise ValueError("SESSION_CROSS_SITE requires APP_ENV=production and Python 3.14+")
         if not self.sqlite_path.is_absolute():
             self.sqlite_path = ROOT / self.sqlite_path
+        key = self.telemetry_hmac_key.get_secret_value()
+        if any((self.telemetry_collector_url, self.telemetry_app_id, key)):
+            parts = urlsplit(self.telemetry_collector_url)
+            loopback = parts.hostname in {"localhost", "127.0.0.1", "::1"}
+            secure = parts.scheme == "https" or (
+                self.app_env != "production" and loopback and parts.scheme == "http"
+            )
+            if (not secure or not parts.hostname or parts.username is not None or parts.path != PATH
+                    or parts.port == 0 or any(char.isspace() for char in self.telemetry_collector_url)
+                    or "?" in self.telemetry_collector_url or "#" in self.telemetry_collector_url
+                    or not re.fullmatch(r"[a-z][a-z0-9-]{0,47}", self.telemetry_app_id)
+                    or not re.fullmatch(r"[0-9a-f]{64}", key)):
+                raise ValueError("Telemetry requires a collector URL, application ID, and 64-digit hex HMAC key")
         return self

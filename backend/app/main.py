@@ -1,8 +1,10 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.routing import APIRoute
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.responses import FileResponse, JSONResponse
@@ -13,16 +15,27 @@ from .config import ROOT, Settings
 from .db import make_engine, make_sessions
 from .middleware import RequestBoundary
 from .security import AuthRateLimit
+from .telemetry import TelemetrySender
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
     engine = make_engine(settings.sqlite_path)
+    telemetry = None
+    if settings.telemetry_collector_url:
+        telemetry = TelemetrySender(settings.telemetry_collector_url, settings.telemetry_app_id,
+                                    bytes.fromhex(settings.telemetry_hmac_key.get_secret_value()))
 
     @asynccontextmanager
     async def lifespan(_app):
-        yield
-        engine.dispose()
+        worker = asyncio.create_task(telemetry.run()) if telemetry else None
+        try:
+            yield
+        finally:
+            if worker:
+                worker.cancel()
+                await asyncio.gather(worker, return_exceptions=True)
+            engine.dispose()
 
     development = settings.app_env != "production"
     app = FastAPI(title="Northfield Student Portal", lifespan=lifespan,
@@ -31,7 +44,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.sessions = make_sessions(engine)
     app.state.auth_limit = AuthRateLimit(settings.auth_requests_per_minute)
-    app.add_middleware(RequestBoundary, settings=settings)
+    api_prefix = "/api"
+    api_routers = (auth_api.router, courses_api.router, assignments_api.router, portal_api.router)
+    route_templates = frozenset(api_prefix + route.path_format for router in api_routers
+                                for route in router.routes if isinstance(route, APIRoute))
+    app.add_middleware(RequestBoundary, settings=settings, telemetry=telemetry,
+                       api_prefix=api_prefix, route_templates=route_templates)
     app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=True,
                        allow_methods=["GET", "POST", "PUT", "DELETE"],
                        allow_headers=["Content-Type", "X-CSRF-Token"], expose_headers=["X-Request-ID"])
@@ -56,8 +74,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             connection.execute(text("SELECT 1 FROM users LIMIT 1"))
         return {"status": "ok"}
 
-    for router in (auth_api.router, courses_api.router, assignments_api.router, portal_api.router):
-        app.include_router(router, prefix="/api")
+    for router in api_routers:
+        app.include_router(router, prefix=api_prefix)
 
     dist = ROOT / "frontend" / "dist"
     if (dist / "index.html").is_file():

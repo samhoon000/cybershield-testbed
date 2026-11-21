@@ -155,3 +155,14 @@ Render supplies `PORT`. Set secrets in the API environment only. The frontend bu
 - `backend/app/activity.py` centralizes structured event creation. It inserts events in the same transaction as business changes. A future asynchronous exporter can read committed events using their IDs as delivery keys.
 - Keep auth and validation outcomes in request context and exclude passwords, cookies, JWTs, CSRF tokens, submission text, and raw request bodies from exported telemetry.
 - The API base and trusted proxy settings support a future security gateway. Feed the external GATv2 system compatible network-flow features or use a separately validated telemetry model.
+## Optional request telemetry
+
+The backend can forward structured HTTP completion metadata to a Sentinel Stage 1 collector. Set all three variables to enable it.
+
+| Variable | Example |
+| --- | --- |
+| `TELEMETRY_COLLECTOR_URL` | `https://telemetry.example.com/v1/http-events` |
+| `TELEMETRY_APP_ID` | `northfield-prod` |
+| `TELEMETRY_HMAC_KEY` | The collector's matching per-app 64-character lowercase hex key |
+
+Production requires HTTPS. For local development and tests, a loopback HTTP collector is supported. The sender uses an in-memory queue. It forwards request IDs, route templates, methods, statuses, durations, and enumerated authentication outcomes. Keep the key in the backend environment.
