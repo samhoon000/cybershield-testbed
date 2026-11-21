@@ -77,8 +77,9 @@ class StagingProtection:
             db.execute("BEGIN IMMEDIATE")
             db.execute("CREATE TABLE IF NOT EXISTS watermark(app TEXT PRIMARY KEY, revision INTEGER NOT NULL)")
             row = db.execute("SELECT revision FROM watermark WHERE app=?", (self.app,)).fetchone()
-            if row and snapshot.revision <= row[0]:
-                return False
+            if row:
+                if snapshot.revision < row[0] or (snapshot.revision == row[0] and snapshot.enabled):
+                    return False
             db.execute("""
                 INSERT INTO watermark VALUES (?, ?) ON CONFLICT(app) DO UPDATE SET revision=excluded.revision
             """, (self.app, snapshot.revision))
