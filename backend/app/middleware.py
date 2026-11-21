@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from time import perf_counter
 from uuid import uuid4
 
+from fastapi.routing import APIRoute
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.responses import JSONResponse
 
@@ -9,11 +10,14 @@ from .security import SAFE_METHODS
 
 
 class RequestBoundary:
-    """Apply request policy and populate payload-free context for future middleware."""
+    """Apply request policy and emit payload-free request completion metadata."""
 
-    def __init__(self, app, settings):
+    def __init__(self, app, settings, telemetry=None, api_prefix="/api", route_templates=frozenset()):
         self.app = app
         self.settings = settings
+        self.telemetry = telemetry
+        self.api_prefix = api_prefix
+        self.route_templates = route_templates
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
@@ -25,12 +29,47 @@ class RequestBoundary:
         state.update(request_id=request_id, timestamp=datetime.now(UTC), started_at=perf_counter(),
                      request_bytes=0, response_bytes=0)
         headers = Headers(scope=scope)
-        is_api = scope["path"].startswith("/api/")
+        is_api = scope["path"].startswith(self.api_prefix + "/")
+        try:
+            await self.handle(scope, receive, send, state, headers, is_api)
+        except Exception:
+            state.setdefault("response_status", 500)
+            raise
+        finally:
+            if self.telemetry is not None and is_api and "response_status" in state:
+                self.emit(scope, state)
+
+    def emit(self, scope, state):
+        route = scope.get("route")
+        status = state["response_status"]
+        template = route.path_format if isinstance(route, APIRoute) else ""
+        # With lazy router inclusion FastAPI may expose the route before applying the include prefix.
+        if template not in self.route_templates:
+            template = self.api_prefix + template
+        if template not in self.route_templates:
+            template = "unmatched" if status in {404, 405} else "pre_router"
+        auth = state.get("auth_outcome", "none")
+        if state.get("rate_limit_outcome") == "denied":
+            auth = "rate_limited"
+        elif auth not in {"anonymous", "authenticated", "denied", "origin_denied"}:
+            auth = "none"
+        method = scope["method"]
+        self.telemetry.submit({
+            "request_id": state["request_id"],
+            "timestamp": int(state["timestamp"].timestamp() * 1000),
+            "route": template,
+            "method": method if method in {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"} else "OTHER",
+            "status": status,
+            "duration_ms": round((perf_counter() - state["started_at"]) * 1000, 2),
+            "auth": auth,
+        })
+
+    async def handle(self, scope, receive, send, state, headers, is_api):
 
         async def guarded_send(message):
             if message["type"] == "http.response.start":
                 outgoing = MutableHeaders(scope=message)
-                outgoing["x-request-id"] = request_id
+                outgoing["x-request-id"] = state["request_id"]
                 outgoing["x-content-type-options"] = "nosniff"
                 outgoing["x-frame-options"] = "DENY"
                 outgoing["referrer-policy"] = "same-origin"
