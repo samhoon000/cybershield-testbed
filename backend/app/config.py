@@ -8,12 +8,13 @@ from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .telemetry import PATH
+from .policy_wire import APP as PROTECTION_APP, SYNC_PATH, channel_environment
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=ROOT / ".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=ROOT / ".env", extra="ignore", hide_input_in_errors=True)
 
     app_env: Literal["development", "test", "production"] = "development"
     jwt_secret: SecretStr
@@ -31,6 +32,11 @@ class Settings(BaseSettings):
     telemetry_collector_url: str = ""
     telemetry_app_id: str = ""
     telemetry_hmac_key: SecretStr = SecretStr("")
+    protection_url: str = ""
+    protection_hmac_key: SecretStr = SecretStr("")
+    protection_subject_key: SecretStr = SecretStr("")
+    protection_production_enabled: bool = False
+    protection_state_path: Path | None = None
 
     @property
     def origins(self) -> list[str]:
@@ -66,4 +72,31 @@ class Settings(BaseSettings):
                     or not re.fullmatch(r"[a-z][a-z0-9-]{0,47}", self.telemetry_app_id)
                     or not re.fullmatch(r"[0-9a-f]{64}", key)):
                 raise ValueError("Telemetry requires a collector URL, application ID, and 64-digit hex HMAC key")
+        policy_key = self.protection_hmac_key.get_secret_value()
+        subject_key = self.protection_subject_key.get_secret_value()
+        production = self.app_env == "production"
+        environment = "production" if production else "staging"
+        if subject_key and (not self.telemetry_collector_url or not re.fullmatch(PROTECTION_APP, self.telemetry_app_id)
+                            or channel_environment(self.telemetry_app_id) != environment
+                            or not re.fullmatch(r"[0-9a-f]{64}", subject_key)
+                            or subject_key in {key, self.jwt_secret.get_secret_value()}):
+            raise ValueError("Attribution requires a matching telemetry environment and an independent key")
+        if self.protection_production_enabled and (not production or not self.protection_url):
+            raise ValueError("Production enforcement requires an explicitly configured production policy channel")
+        if self.protection_url or policy_key:
+            target = urlsplit(self.protection_url)
+            if (not subject_key or not target.hostname or target.username is not None or target.port == 0
+                    or target.path != SYNC_PATH or "?" in self.protection_url or "#" in self.protection_url
+                    or any(char.isspace() for char in self.protection_url)
+                    or not re.fullmatch(r"[0-9a-f]{64}", policy_key)
+                    or len({policy_key, subject_key, key, self.jwt_secret.get_secret_value()}) != 4):
+                raise ValueError("Policy channel requires verified attribution, an exact endpoint and an independent key")
+            if not production and (target.scheme != "http" or target.hostname != "127.0.0.1" or not target.port
+                                   or self.protection_url != f"http://127.0.0.1:{target.port}{SYNC_PATH}"):
+                raise ValueError("Staging policy channel requires an explicit loopback HTTP endpoint")
+            if production and (target.scheme != "https" or not self.protection_production_enabled
+                               or self.protection_state_path is None or not self.protection_state_path.is_absolute()
+                               or not self.protection_state_path.parent.is_dir()
+                               or self.protection_state_path.resolve() == self.sqlite_path.resolve()):
+                raise ValueError("Production policy enforcement requires explicit opt-in, HTTPS and durable state")
         return self

@@ -166,3 +166,11 @@ The backend can forward structured HTTP completion metadata to a Sentinel Stage 
 | `TELEMETRY_HMAC_KEY` | The collector's matching per-app 64-character lowercase hex key |
 
 Production requires HTTPS. For local development and tests, a loopback HTTP collector is supported. The sender uses an in-memory queue. It forwards request IDs, route templates, methods, statuses, durations, and enumerated authentication outcomes. Keep the key in the backend environment.
+
+## Isolated staging enforcement
+
+For production Shadow Mode, keep `TELEMETRY_APP_ID=northfield-prod` and the existing HTTPS telemetry collector and HMAC key. Set `PROTECTION_SUBJECT_KEY` to an independent 32-byte random key encoded as 64 lowercase hex characters. Leave `PROTECTION_PRODUCTION_ENABLED=false` and leave `PROTECTION_URL`, `PROTECTION_HMAC_KEY`, and `PROTECTION_STATE_PATH` unset. Eligible authenticated student requests then include a pseudonym. Policy sync remains off.
+
+For an independent staging environment, use a telemetry ID ending in `-staging` and `PROTECTION_URL=http://127.0.0.1:8093/v1/policy/sync`. Use distinct keys for telemetry, policy sync, subject attribution, and JWTs. An approved production rollout requires an HTTPS `PROTECTION_URL` ending in `/v1/policy/sync`, a matching independent `PROTECTION_HMAC_KEY`, `PROTECTION_PRODUCTION_ENABLED=true` to start the receiver, and an absolute `PROTECTION_STATE_PATH` on persistent storage. The issuer initially sends a disabled snapshot. Rules expire within two minutes and require explicit approval in Sentinel.
+
+The backend applies an approved rule only after verifying a student’s session and CSRF, on the exact permitted route template and method. Policy sync runs in the background. If sync fails or the policy expires, normal request handling resumes. To disable an installed revision locally, create an empty file beside the staging database using the same basename and the extension `.policy-disabled`. A fresh approved revision is required after disabling.

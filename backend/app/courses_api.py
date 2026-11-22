@@ -111,10 +111,12 @@ def enroll(course_id: int, request: Request, user: User = Depends(student_only),
 
 
 @router.post("/{course_id}/access", status_code=204)
-def access(course_id: int, user: User = Depends(student_only), db: Session = Depends(db_session)):
+def access(course_id: int, request: Request, user: User = Depends(student_only), db: Session = Depends(db_session)):
     result = db.execute(update(Enrollment).where(Enrollment.user_id == user.id, Enrollment.course_id == course_id)
                         .values(last_accessed_at=now()))
     if not result.rowcount:
+        if getattr(request.state, "telemetry_subject", None) and db.get(Course, course_id) is not None:
+            request.state.auth_outcome = "authorization_denied"
         raise HTTPException(404, "Enrollment not found")
     db.commit()
 
