@@ -280,3 +280,503 @@ td code { font-size: .8rem; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
+
+
+/* =====================================================================
+   CYBERSHIELD PERSISTENT SECURITY INCIDENT SCREEN (RANSOMWARE SIMULATION)
+   Designed exclusively for Sentinel AI presentation demo.
+   ===================================================================== */
+.cs-incident-root {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background-color: #0b0204;
+  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  animation: csFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  user-select: text;
+}
+
+.cs-incident-dismissing {
+  animation: csFadeOut 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  pointer-events: none;
+}
+
+.cs-incident-backdrop {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at 50% 30%, #2b080f 0%, #150306 60%, #080102 100%);
+  opacity: 0.98;
+  pointer-events: none;
+}
+
+.cs-incident-window {
+  position: relative;
+  z-index: 10;
+  width: 95vw;
+  max-width: 1140px;
+  min-height: 640px;
+  margin: 24px auto;
+  display: flex;
+  background: #140306;
+  border: 1px solid #5c1822;
+  border-radius: 16px;
+  box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.85), 0 0 50px rgba(185, 28, 28, 0.22);
+  overflow: hidden;
+}
+
+/* --- SIDEBAR --- */
+.cs-incident-sidebar {
+  width: 320px;
+  flex-shrink: 0;
+  background: #1b0408;
+  border-right: 1px solid #4a131b;
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.cs-lock-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 12px 0 8px;
+}
+
+.cs-lock-badge {
+  width: 96px;
+  height: 96px;
+  background: #5c1118;
+  border: 2px solid #8b1523;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(92, 17, 24, 0.6);
+}
+
+.cs-lock-icon {
+  width: 54px;
+  height: 54px;
+  color: #ffffff;
+}
+
+.cs-sidebar-card {
+  background: #24070d;
+  border: 1px solid #541620;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.cs-status-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  color: #e2e8f0;
+  margin-bottom: 6px;
+}
+
+.cs-status-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #ef4444;
+}
+
+.cs-pulse-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 10px #ef4444;
+  animation: csPulseRed 1.8s infinite ease-in-out;
+}
+
+.cs-pulse-recovered {
+  background: #10b981 !important;
+  box-shadow: 0 0 10px #10b981 !important;
+  animation: none !important;
+}
+
+.cs-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 0;
+  font-size: 0.82rem;
+  border-bottom: 1px solid rgba(84, 22, 32, 0.5);
+}
+
+.cs-info-row:last-child {
+  border-bottom: none;
+}
+
+.cs-info-key {
+  color: #94a3b8;
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+}
+
+.cs-info-val {
+  color: #f1f5f9;
+  font-weight: 500;
+}
+
+.cs-code-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.78rem;
+  color: #fca5a5;
+  background: rgba(92, 17, 24, 0.4);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.cs-card-subhead {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: #94a3b8;
+  margin-bottom: 10px;
+}
+
+.cs-integrity-bar {
+  width: 100%;
+  height: 6px;
+  background: #150306;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.cs-integrity-fill {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, #b91c1c, #dc2626);
+  border-radius: 3px;
+}
+
+.cs-fill-green {
+  background: linear-gradient(90deg, #059669, #10b981) !important;
+}
+
+.cs-integrity-caption {
+  font-size: 0.72rem;
+  color: #cbd5e1;
+}
+
+/* --- MAIN CONTENT AREA --- */
+.cs-incident-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #130306;
+  min-width: 0;
+}
+
+.cs-incident-head {
+  padding: 28px 36px 20px;
+  background: linear-gradient(180deg, #24060c 0%, #170407 100%);
+  border-bottom: 1px solid #4a131b;
+}
+
+.cs-kicker-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(185, 28, 28, 0.25);
+  border: 1px solid #8b1523;
+  color: #fca5a5;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+}
+
+.cs-title {
+  margin: 0 0 6px 0;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+  line-height: 1.15;
+}
+
+.cs-subtitle {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #f87171;
+}
+
+/* Central Light-Grey / White Information Panel */
+.cs-panel-body {
+  flex: 1;
+  margin: 24px 36px;
+  background: #f8fafc;
+  color: #0f172a;
+  border-radius: 12px;
+  padding: 28px 32px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  overflow-y: auto;
+}
+
+.cs-panel-section {
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 18px;
+}
+
+.cs-panel-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.cs-sec-title {
+  margin: 0 0 8px 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.cs-sec-text {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: #334155;
+}
+
+.cs-grid-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.cs-detail-box {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cs-d-key {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.cs-d-val {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.cs-tag-warning {
+  color: #b91c1c !important;
+}
+
+.cs-tag-success {
+  color: #047857 !important;
+}
+
+.cs-assessment-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.cs-assess-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.cs-assess-bullet {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cs-bullet-red { background: #ef4444; }
+.cs-bullet-yellow { background: #f59e0b; }
+.cs-bullet-blue { background: #3b82f6; }
+
+.cs-assess-name {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.cs-assess-val {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.cs-recovery-section {
+  background: #fff1f2;
+  border: 1px solid #fecdd3 !important;
+  border-radius: 10px;
+  padding: 16px 20px;
+}
+
+.cs-recovery-section .cs-sec-title {
+  color: #9f1239;
+}
+
+.cs-recovery-section .cs-sec-text {
+  color: #881337;
+}
+
+.cs-unlocking-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #9f1239;
+}
+
+.cs-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #fda4af;
+  border-top-color: #9f1239;
+  border-radius: 50%;
+  animation: csSpin 0.7s linear infinite;
+}
+
+/* --- FOOTER STATUS BAR --- */
+.cs-incident-footer {
+  padding: 16px 36px;
+  background: #0f0205;
+  border-top: 1px solid #4a131b;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+}
+
+.cs-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #e2e8f0;
+}
+
+.cs-footer-divider {
+  color: #541620;
+}
+
+.cs-muted {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.cs-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #cbd5e1;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.cs-text-alert {
+  color: #ef4444;
+}
+
+.cs-text-recovered {
+  color: #10b981 !important;
+}
+
+/* Animations */
+@keyframes csFadeIn {
+  from { opacity: 0; transform: scale(0.985); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes csFadeOut {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.97); }
+}
+
+@keyframes csPulseRed {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+@keyframes csSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive adjustments */
+@media (max-width: 860px) {
+  .cs-incident-window {
+    flex-direction: column;
+    margin: 0;
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+    border: none;
+  }
+  .cs-incident-sidebar {
+    width: 100%;
+    padding: 20px;
+    border-right: none;
+    border-bottom: 1px solid #4a131b;
+  }
+  .cs-lock-badge {
+    width: 64px;
+    height: 64px;
+    border-radius: 14px;
+  }
+  .cs-lock-icon {
+    width: 36px;
+    height: 36px;
+  }
+  .cs-incident-head {
+    padding: 20px;
+  }
+  .cs-title {
+    font-size: 1.5rem;
+  }
+  .cs-panel-body {
+    margin: 16px 20px;
+    padding: 20px;
+  }
+  .cs-incident-footer {
+    padding: 14px 20px;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+}

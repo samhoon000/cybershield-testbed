@@ -38,6 +38,12 @@ services:
         sync: false
       - key: DEMO_STUDENT_PASSWORD
         sync: false
+      - key: SENTINEL_ALLOWED_API_KEY
+        value: sentinel-cybershield-demo-secret-key-2026
+      - key: SCREEN_LOCK_SIMULATION_ENABLED
+        value: "true"
+      - key: SCREEN_LOCK_SESSION_TTL
+        value: "30"
 
   - type: web
     name: northfield-portal

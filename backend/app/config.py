@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     protection_subject_key: SecretStr = SecretStr("")
     protection_production_enabled: bool = False
     protection_state_path: Path | None = None
+    sentinel_allowed_api_key: SecretStr = SecretStr("sentinel-cybershield-demo-secret-key-2026")
+    screen_lock_simulation_enabled: bool = True
+    screen_lock_session_ttl: int = Field(30, ge=1, le=1440)
+    frontend_base_url: str = ""
 
     @property
     def origins(self) -> list[str]:

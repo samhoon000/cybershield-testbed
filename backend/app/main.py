@@ -10,7 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from starlette.responses import FileResponse, JSONResponse
 from starlette.staticfiles import StaticFiles
 
-from . import assignments_api, auth_api, courses_api, portal_api
+from . import assignments_api, auth_api, courses_api, portal_api, simulation_api
 from .config import ROOT, Settings
 from .db import make_engine, make_sessions
 from .middleware import RequestBoundary
@@ -49,14 +49,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.protection = protection
     app.state.subject_key = bytes.fromhex(settings.protection_subject_key.get_secret_value())
     api_prefix = "/api"
-    api_routers = (auth_api.router, courses_api.router, assignments_api.router, portal_api.router)
+    api_routers = (auth_api.router, courses_api.router, assignments_api.router, portal_api.router, simulation_api.router)
     route_templates = frozenset(api_prefix + route.path_format for router in api_routers
                                 for route in router.routes if isinstance(route, APIRoute))
     app.add_middleware(RequestBoundary, settings=settings, telemetry=telemetry,
                        api_prefix=api_prefix, route_templates=route_templates)
     app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=True,
                        allow_methods=["GET", "POST", "PUT", "DELETE"],
-                       allow_headers=["Content-Type", "X-CSRF-Token"], expose_headers=["X-Request-ID"])
+                       allow_headers=["Content-Type", "X-CSRF-Token", "X-CyberShield-Key", "Authorization"],
+                       expose_headers=["X-Request-ID"])
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError):

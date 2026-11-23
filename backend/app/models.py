@@ -115,3 +115,21 @@ class Session(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     expires_at: Mapped[datetime] = mapped_column(index=True)
+
+
+class SimulationSession(Base):
+    __tablename__ = "simulation_sessions"
+    __table_args__ = (
+        Index("ix_simulation_sessions_status_exp", "status", "expires_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    incident_id: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+    target_app: Mapped[str] = mapped_column(String(50), default="CyberShield")
+    created_at: Mapped[datetime] = mapped_column(default=now)
+    expires_at: Mapped[datetime] = mapped_column(index=True)
+    unlocked_at: Mapped[datetime | None] = mapped_column(default=None)
+    terminated_at: Mapped[datetime | None] = mapped_column(default=None)
+    client_ip: Mapped[str | None] = mapped_column(String(45), default=None)
+    notes: Mapped[str | None] = mapped_column(String(255), default=None)
